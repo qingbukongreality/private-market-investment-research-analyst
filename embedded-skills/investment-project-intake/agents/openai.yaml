@@ -1,0 +1,4 @@
+interface:
+  display_name: "投资项目表录入"
+  short_description: "核查BP、纪要与工商摘录，用白描格式录入项目表并标来源"
+  default_prompt: "Use $investment-project-intake to verify the supplied project materials and create a low-bit, source-noted project-table entry matching the bundled examples."

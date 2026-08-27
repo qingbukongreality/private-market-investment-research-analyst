@@ -1,0 +1,5 @@
+interface:
+  display_name: "投资项目会议纪要"
+  short_description: "从公司BP与访谈录音生成修正稿、详细问答及标准会议纪要"
+  default_prompt: "Use $investment-meeting-minutes to process a company BP and meeting recording into a corrected transcript, detailed Q&A, and a template-compliant meeting memo."
+
