@@ -365,6 +365,7 @@ function qaInformationLength(items) {
 
 function multilineFinancing(value) {
   return String(value || "")
+    .replace(/\\r\\n|\\n|\\r/g, "\n")
     .replace(/\s*[；;]\s*/g, "\n")
     .replace(/\n{2,}/g, "\n")
     .trim();
@@ -372,10 +373,20 @@ function multilineFinancing(value) {
 
 function multilineFinancialResult(value) {
   return blankMissing(value)
+    .replace(/\\r\\n|\\n|\\r/g, "\n")
     .replace(/\s*[；;]\s*/g, "\n")
     .replace(/[，,]\s*(?=20\d{2}年)/g, "\n")
     .replace(/\n{2,}/g, "\n")
     .trim();
+}
+
+function detailedInvestors(value) {
+  return multilineFinancing(value).split(/\n+/).map(line => {
+    const text = line.trim();
+    if (!text || /未披露具体数额/.test(text)) return text;
+    const hasAmount = /(?:人民币|美元|港元|融资额|投资额|出资额|数额|金额)|\d+(?:\.\d+)?\s*(?:亿|万)(?:元|美元|人民币|港元)?/.test(text);
+    return hasAmount ? text : `${text}，未披露具体数额`;
+  }).filter(Boolean).join("\n");
 }
 
 function blankMissing(value) {
@@ -384,7 +395,7 @@ function blankMissing(value) {
 }
 
 function removeMissingPlaceholders(value) {
-  return String(value || "").split("\n").map(line => {
+  return String(value || "").replace(/\\r\\n|\\n|\\r/g, "\n").split("\n").map(line => {
     const match = /^((?:[1-7])\.(?:团队|股权结构|产品|技术|生产、客户|市场|收入))\s*(.*)$/.exec(line.trim());
     if (!match) return blankMissing(line);
     return blankMissing(match[2]) ? `${match[1]}${match[2].trim()}` : match[1];
@@ -392,7 +403,7 @@ function removeMissingPlaceholders(value) {
 }
 
 function conflictNotes(value) {
-  return String(value || "").split(/\n+/).map(line => line.trim()).filter(line => /^冲突[:：]/.test(line) && /(?:BP|商业计划书)/i.test(line) && /(?:会议|纪要|录音|访谈)/.test(line)).join("\n");
+  return String(value || "").replace(/\\r\\n|\\n|\\r/g, "\n").split(/\n+/).map(line => line.trim()).filter(line => /^冲突[:：]/.test(line) && /(?:BP|商业计划书)/i.test(line) && /(?:会议|纪要|录音|访谈)/.test(line)).join("\n");
 }
 
 function parseAIJson(raw) {
@@ -499,7 +510,7 @@ async function appendExcel(template, outputFile, values) {
     const previousSequence = Number(/<c\b[^>]*r="A\d+"[^>]*>[\s\S]*?<v>(\d+)<\/v>/.exec(lastXml)?.[1] || rowNo - 4);
     values[0] = String(previousSequence + 1);
     const cols = "ABCDEFGHIJKLMNOPQR".split("");
-    const cells = cols.map((col, index) => { const style = new RegExp(`<c\\b[^>]*r="${col}${rowNo-1}"[^>]*s="(\\d+)"`).exec(lastXml)?.[1]; return `<c r="${col}${rowNo}"${style ? ` s="${style}"` : ""} t="inlineStr"><is><t xml:space="preserve">${xmlEscape(values[index] || "")}</t></is></c>`; }).join("");
+    const cells = cols.map((col, index) => { const style = new RegExp(`<c\\b[^>]*r="${col}${rowNo-1}"[^>]*s="(\\d+)"`).exec(lastXml)?.[1]; const cellValue = String(values[index] || "").replace(/\\r\\n|\\n|\\r/g, "\n"); return `<c r="${col}${rowNo}"${style ? ` s="${style}"` : ""} t="inlineStr"><is><t xml:space="preserve">${xmlEscape(cellValue)}</t></is></c>`; }).join("");
     const previousRowTag = /^<row\b([^>]*)>/.exec(lastXml)?.[1] || "";
     const rowAttrs = previousRowTag.replace(/\br="\d+"/, `r="${rowNo}"`).replace(/\bspans="[^"]*"/, 'spans="1:18"');
     xml = xml.replace(/<\/sheetData>/, `<row${rowAttrs}>${cells}</row></sheetData>`).replace(/<dimension ref="([A-Z]+\d+):([A-Z]+)\d+"\/>/, `<dimension ref="$1:R${rowNo}"/>`);
@@ -648,7 +659,7 @@ const server = createServer(async (req, res) => {
         const pendingStamp = new Date().toISOString().replace(/[-:.TZ]/g, "");
         outputFile = path.join(pendingDir, `${details.name}-${pendingStamp}-项目录入.xlsx`);
         const styleExample = await firstProjectIntakeStyleExample(template);
-        const system = `${intakeInstructions}\n\n你必须完整执行以上Skill。只输出JSON，字段严格为 shortName,establishedDate,city,ipoPlan,previousRound,investors,currentPreMoney,currentFinancing,financingDeadline,mainBusiness,value,revenue,profit,notes。mainBusiness是唯一需要高度精简的产品字段，只写一句产品级短语，不展开型号、参数或状态。value必须严格按照“1.团队、2.股权结构、3.产品、4.技术、5.生产、客户、6.市场、7.收入”七段顺序，每段另起一行，标题文字和标点不得改写；某段无信息时只保留该段标题，不写任何缺失占位语。“1.团队”比其他段稍详细，写3-5位关键成员的姓名、岗位、相关学历或原单位、产业经历及具体分工，但不复制完整简历；“3.产品”必须详细，保留材料中具有实质信息的主要产品线、具体产品或型号、用途、关键参数及量产/供货/送样/在研状态，不得套用mainBusiness的精简限制，只删除完全重复或与主营无关的信息。previousRound、investors、currentPreMoney、currentFinancing、financingDeadline 中有多个融资轮次、机构、金额或事项时，使用\\n逐项换行，禁止用分号连写。revenue和profit存在多个年份、实际/预计口径或多个事项时，也必须使用\\n逐项换行。notes只允许写BP与会议纪要/录音之间无法消解的直接冲突，每个冲突以“冲突：”开头并在同一行明确写出BP口径和会议口径；没有此类冲突时notes必须为空字符串。任何字段无可靠信息都输出空字符串，严禁写“暂无披露、未披露、未提及、材料未说明、待补充、待确认、不详”等占位话术，也不写资料来源、一般缺失项或核查建议，禁止猜测。`;
+        const system = `${intakeInstructions}\n\n你必须完整执行以上Skill。只输出JSON，字段严格为 shortName,establishedDate,city,ipoPlan,previousRound,investors,currentPreMoney,currentFinancing,financingDeadline,mainBusiness,value,revenue,profit,notes。mainBusiness是唯一需要高度精简的产品字段，只写一句产品级短语，不展开型号、参数或状态。value必须严格按照“1.团队、2.股权结构、3.产品、4.技术、5.生产、客户、6.市场、7.收入”七段顺序，每段另起一行，标题文字和标点不得改写；某段无信息时只保留该段标题，不写任何缺失占位语。“1.团队”比其他段稍详细，写3-5位关键成员的姓名、岗位、相关学历或原单位、产业经历及具体分工，但不复制完整简历；“3.产品”必须详细，保留材料中具有实质信息的主要产品线、具体产品或型号、用途、关键参数及量产/供货/送样/在研状态，不得套用mainBusiness的精简限制，只删除完全重复或与主营无关的信息。investors（已投机构）必须尽量完整：按时间和轮次逐行写投资机构及投资金额，不得只保留一两个机构；材料明确机构但没有该轮具体投资金额时，在该行机构名称后写“未披露具体数额”。只有连投资机构本身也没有可靠信息时，investors才输出空字符串。previousRound、investors、currentPreMoney、currentFinancing、financingDeadline 中有多个融资轮次、机构、金额或事项时，使用JSON字符串中的\\n逐项换行，禁止用分号连写，也禁止输出可见的反斜杠和字母n。revenue和profit存在多个年份、实际/预计口径或多个事项时，也必须使用真正的换行逐项呈现。notes只允许写BP与会议纪要/录音之间无法消解的直接冲突，每个冲突以“冲突：”开头并在同一行明确写出BP口径和会议口径；没有此类冲突时notes必须为空字符串。除investors字段对已知机构但未知金额使用“未披露具体数额”外，任何字段无可靠信息都输出空字符串，严禁写“暂无披露、未披露、未提及、材料未说明、待补充、待确认、不详”等占位话术，也不写资料来源、一般缺失项或核查建议，禁止猜测。`;
         const styleSection = styleExample ? `\n\n总表最上面的第一条正式项目行（只模仿写法，禁止复制事实）：\n${styleExample}` : "";
         const result = await aiJson(`${system}\n现有总表的第一条正式项目行只用于模仿字段口径、句式、详略和换行；样例与显式规则冲突时，以显式规则为准。`, `项目：${details.name}\n项目来源：${body.projectSource || details.metadata.projectSource || "待补充"}\n生成日期：${new Date().toLocaleDateString("zh-CN")}${styleSection}\n\n当前项目材料（唯一事实来源）：${materials}`, 12000, generationAbort.signal);
         result.value = String(result.value || "")
@@ -662,7 +673,7 @@ const server = createServer(async (req, res) => {
         for (const label of labels) { const next = String(result.value || "").indexOf(label); if (next <= position) throw new Error(`项目价值判断缺少或未按顺序包含“${label}”`); position = next; }
         const now = new Date(); const sourceValue = String(body.projectSource || details.metadata.projectSource || "").trim(); const sourceCell = `${sourceValue ? `项目来源：${sourceValue}\n` : ""}录入时间：${now.getFullYear()}年${now.getMonth()+1}月${now.getDate()}日`;
         const notes = conflictNotes(result.notes);
-        const values = ["", result.shortName || details.name, blankMissing(result.establishedDate), blankMissing(result.city), blankMissing(result.ipoPlan), multilineFinancing(blankMissing(result.previousRound)), multilineFinancing(blankMissing(result.investors)), multilineFinancing(blankMissing(result.currentPreMoney)), multilineFinancing(blankMissing(result.currentFinancing)), multilineFinancing(blankMissing(result.financingDeadline)), blankMissing(result.mainBusiness), result.value, multilineFinancialResult(result.revenue), multilineFinancialResult(result.profit), sourceCell, "", "", notes];
+        const values = ["", result.shortName || details.name, blankMissing(result.establishedDate), blankMissing(result.city), blankMissing(result.ipoPlan), multilineFinancing(blankMissing(result.previousRound)), detailedInvestors(blankMissing(result.investors)), multilineFinancing(blankMissing(result.currentPreMoney)), multilineFinancing(blankMissing(result.currentFinancing)), multilineFinancing(blankMissing(result.financingDeadline)), blankMissing(result.mainBusiness), result.value, multilineFinancialResult(result.revenue), multilineFinancialResult(result.profit), sourceCell, "", "", notes];
         await appendExcel(template, outputFile, values);
         return send(res, 200, { ok: true, message: "项目录入预览已生成，请检查后确认加入总表", outputFile });
       }
