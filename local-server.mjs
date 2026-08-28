@@ -717,6 +717,15 @@ const server = createServer(async (req, res) => {
       }
       return send(res, 200, { ok: true, message: "已确认加入项目总表", masterFile, backupFile });
     }
+    if (req.method === "POST" && requestUrl.pathname === "/api/intake/discard") {
+      const body = await bodyJson(req);
+      const generatedFile = path.resolve(String(body.generatedFile || ""));
+      const pendingDir = path.resolve(path.join(dataDir, "pending-intakes"));
+      const relative = path.relative(pendingDir, generatedFile);
+      if (!relative || relative.startsWith("..") || path.isAbsolute(relative) || !/\.xlsx$/i.test(generatedFile)) throw new Error("待删除的项目录入预览无效");
+      await rm(generatedFile, { force: true });
+      return send(res, 200, { ok: true, message: "临时项目录入预览已删除，总表未修改" });
+    }
     if (req.method === "POST" && requestUrl.pathname === "/api/ai/config") {
       const body = await bodyJson(req);
       const provider = body.provider === "minimax" ? "minimax" : "deepseek";
