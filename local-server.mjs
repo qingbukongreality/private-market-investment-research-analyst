@@ -403,7 +403,11 @@ function removeMissingPlaceholders(value) {
 }
 
 function conflictNotes(value) {
-  return String(value || "").replace(/\\r\\n|\\n|\\r/g, "\n").split(/\n+/).map(line => line.trim()).filter(line => /^冲突[:：]/.test(line) && /(?:BP|商业计划书)/i.test(line) && /(?:会议|纪要|录音|访谈)/.test(line)).join("\n");
+  return String(value || "").replace(/\\r\\n|\\n|\\r/g, "\n").split(/\n+/)
+    .map(line => line.trim())
+    .filter(line => line && !/^(?:暂无|未披露|未提及|无冲突|无)$/.test(line))
+    .map(line => /^冲突[:：]/.test(line) ? line.replace(/^冲突:/, "冲突：") : `冲突：${line}`)
+    .join("\n");
 }
 
 function parseAIJson(raw) {
@@ -507,8 +511,17 @@ async function appendExcel(template, outputFile, values) {
     await runFile("/usr/bin/unzip", ["-q", template, "-d", temp]);
     const sheetFile = path.join(temp, "xl/worksheets/sheet1.xml"); let xml = await readFile(sheetFile, "utf8");
     const rows = [...xml.matchAll(/<row\b[^>]*r="(\d+)"[^>]*>[\s\S]*?<\/row>/g)]; const last = rows.at(-1); const rowNo = Number(last?.[1] || 1) + 1; const lastXml = last?.[0] || "";
-    const previousSequence = Number(/<c\b[^>]*r="A\d+"[^>]*>[\s\S]*?<v>(\d+)<\/v>/.exec(lastXml)?.[1] || rowNo - 4);
-    values[0] = String(previousSequence + 1);
+    const sharedXml = await readFile(path.join(temp, "xl/sharedStrings.xml"), "utf8").catch(() => "");
+    const sharedValues = [...sharedXml.matchAll(/<si\b[^>]*>([\s\S]*?)<\/si>/g)].map(match => xmlDecode(match[1]).trim());
+    const sequences = rows.map(row => {
+      const rowXml = row[0]; const rowIndex = row[1];
+      const cell = new RegExp(`<c\\b([^>]*)r="A${rowIndex}"([^>]*)>([\\s\\S]*?)<\\/c>`).exec(rowXml);
+      if (!cell) return NaN;
+      const attrs = `${cell[1]} ${cell[2]}`; const body = cell[3];
+      const raw = /\bt="s"/.test(attrs) ? sharedValues[Number(/<v>(\d+)<\/v>/.exec(body)?.[1])] : (/<t[^>]*>([\s\S]*?)<\/t>/.exec(body)?.[1] || /<v>([^<]+)<\/v>/.exec(body)?.[1] || "");
+      return /^\d+$/.test(String(raw).trim()) ? Number(raw) : NaN;
+    }).filter(Number.isFinite);
+    values[0] = String((sequences.length ? Math.max(...sequences) : 0) + 1);
     const cols = "ABCDEFGHIJKLMNOPQR".split("");
     const cells = cols.map((col, index) => { const style = new RegExp(`<c\\b[^>]*r="${col}${rowNo-1}"[^>]*s="(\\d+)"`).exec(lastXml)?.[1]; const cellValue = String(values[index] || "").replace(/\\r\\n|\\n|\\r/g, "\n"); return `<c r="${col}${rowNo}"${style ? ` s="${style}"` : ""} t="inlineStr"><is><t xml:space="preserve">${xmlEscape(cellValue)}</t></is></c>`; }).join("");
     const previousRowTag = /^<row\b([^>]*)>/.exec(lastXml)?.[1] || "";
