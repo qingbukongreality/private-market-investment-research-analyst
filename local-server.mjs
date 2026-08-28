@@ -1,5 +1,5 @@
 import { createServer } from "node:http";
-import { access, readdir, readFile, stat, writeFile, mkdir, mkdtemp, cp, rm } from "node:fs/promises";
+import { access, readdir, readFile, stat, writeFile, mkdir, mkdtemp, cp, rm, rename } from "node:fs/promises";
 import { constants } from "node:fs";
 import path from "node:path";
 import os from "node:os";
@@ -659,6 +659,32 @@ const server = createServer(async (req, res) => {
         return send(res, 200, { ok: true, message: `项目录入已生成：${outputFile}`, outputFile });
       }
       return send(res, 400, { ok: false, error: "未知生成任务" });
+    }
+    if (req.method === "POST" && requestUrl.pathname === "/api/intake/confirm") {
+      const body = await bodyJson(req);
+      const workspaceInfo = await inspectWorkspace(body.workspace);
+      const project = safeProjectName(body.project);
+      const outputRoot = path.resolve(String(body.outputPath || ""));
+      const generatedFile = path.resolve(String(body.generatedFile || ""));
+      const expectedDir = path.join(outputRoot, project);
+      const relative = path.relative(expectedDir, generatedFile);
+      if (!relative || relative.startsWith("..") || path.isAbsolute(relative) || !/\.xlsx$/i.test(generatedFile)) throw new Error("待确认的项目录入文件无效");
+      await access(generatedFile, constants.R_OK);
+      const masterName = workspaceInfo.excelFiles.find(name => name === "项目表录入.xlsx");
+      if (!masterName) throw new Error("输入根目录未找到《项目表录入.xlsx》");
+      const masterFile = path.join(workspaceInfo.path, masterName);
+      const stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\..+/, "").replace("T", "-");
+      const backupFile = path.join(workspaceInfo.path, `项目表录入.备份-${stamp}.xlsx`);
+      const temporaryFile = path.join(workspaceInfo.path, `.项目表录入.${process.pid}.tmp.xlsx`);
+      await cp(masterFile, backupFile);
+      try {
+        await cp(generatedFile, temporaryFile);
+        await rename(temporaryFile, masterFile);
+      } catch (error) {
+        await rm(temporaryFile, { force: true });
+        throw error;
+      }
+      return send(res, 200, { ok: true, message: `已确认录入总表：${masterFile}`, masterFile, backupFile });
     }
     if (req.method === "POST" && requestUrl.pathname === "/api/ai/config") {
       const body = await bodyJson(req);
