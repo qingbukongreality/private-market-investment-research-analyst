@@ -591,11 +591,15 @@ const server = createServer(async (req, res) => {
       res.once("close", () => { if (!res.writableEnded) generationAbort.abort(); });
       if (!aiConfig.apiKeys[aiConfig.provider]) return send(res, 412, { ok: false, needsAI: true, error: `此步骤需要 ${providerInfo(aiConfig.provider).name}，请先完成本地 AI 配置。` });
       const details = await projectDetails(body.workspace, body.project);
-      const outputRoot = path.resolve(String(body.outputPath || body.workspace || "")); await access(outputRoot, constants.R_OK | constants.W_OK);
-      const outputDir = path.join(outputRoot, details.name); await mkdir(outputDir, { recursive: true });
       const date = String(details.metadata.meetingDate || new Date().toISOString().slice(0,10)).replaceAll("-", "");
-      let outputFile = path.join(outputDir, body.stage === "会议纪要" ? `${details.name}会议纪要${date}.docx` : "项目表录入.xlsx");
-      if (await fileExists(outputFile)) {
+      const outputRoot = path.resolve(String(body.outputPath || body.workspace || ""));
+      let outputFile = "";
+      if (body.stage === "会议纪要") {
+        await access(outputRoot, constants.R_OK | constants.W_OK);
+        const outputDir = path.join(outputRoot, details.name); await mkdir(outputDir, { recursive: true });
+        outputFile = path.join(outputDir, `${details.name}会议纪要${date}.docx`);
+      }
+      if (body.stage === "会议纪要" && await fileExists(outputFile)) {
         if (body.fileMode === "version") outputFile = await versionedPath(outputFile);
         else if (body.fileMode !== "overwrite") return send(res, 409, { ok: false, conflict: true, error: "输出文件已存在", outputFile });
       }
@@ -639,6 +643,10 @@ const server = createServer(async (req, res) => {
         const templateName = workspaceInfo.excelFiles.find(name => name === "项目表录入.xlsx") || workspaceInfo.excelFiles[0];
         if (!templateName) throw new Error("未找到项目录入模板，请在输入根目录放置《项目表录入.xlsx》");
         const template = path.join(body.workspace, templateName);
+        const pendingDir = path.join(dataDir, "pending-intakes");
+        await mkdir(pendingDir, { recursive: true });
+        const pendingStamp = new Date().toISOString().replace(/[-:.TZ]/g, "");
+        outputFile = path.join(pendingDir, `${details.name}-${pendingStamp}-项目录入.xlsx`);
         const styleExample = await firstProjectIntakeStyleExample(template);
         const system = `${intakeInstructions}\n\n你必须完整执行以上Skill。只输出JSON，字段严格为 shortName,establishedDate,city,ipoPlan,previousRound,investors,currentPreMoney,currentFinancing,financingDeadline,mainBusiness,value,revenue,profit,notes。mainBusiness是唯一需要高度精简的产品字段，只写一句产品级短语，不展开型号、参数或状态。value必须严格按照“1.团队、2.股权结构、3.产品、4.技术、5.生产、客户、6.市场、7.收入”七段顺序，每段另起一行，标题文字和标点不得改写；某段无信息时只保留该段标题，不写任何缺失占位语。“1.团队”比其他段稍详细，写3-5位关键成员的姓名、岗位、相关学历或原单位、产业经历及具体分工，但不复制完整简历；“3.产品”必须详细，保留材料中具有实质信息的主要产品线、具体产品或型号、用途、关键参数及量产/供货/送样/在研状态，不得套用mainBusiness的精简限制，只删除完全重复或与主营无关的信息。previousRound、investors、currentPreMoney、currentFinancing、financingDeadline 中有多个融资轮次、机构、金额或事项时，使用\\n逐项换行，禁止用分号连写。revenue和profit存在多个年份、实际/预计口径或多个事项时，也必须使用\\n逐项换行。notes只允许写BP与会议纪要/录音之间无法消解的直接冲突，每个冲突以“冲突：”开头并在同一行明确写出BP口径和会议口径；没有此类冲突时notes必须为空字符串。任何字段无可靠信息都输出空字符串，严禁写“暂无披露、未披露、未提及、材料未说明、待补充、待确认、不详”等占位话术，也不写资料来源、一般缺失项或核查建议，禁止猜测。`;
         const styleSection = styleExample ? `\n\n总表最上面的第一条正式项目行（只模仿写法，禁止复制事实）：\n${styleExample}` : "";
@@ -656,18 +664,16 @@ const server = createServer(async (req, res) => {
         const notes = conflictNotes(result.notes);
         const values = ["", result.shortName || details.name, blankMissing(result.establishedDate), blankMissing(result.city), blankMissing(result.ipoPlan), multilineFinancing(blankMissing(result.previousRound)), multilineFinancing(blankMissing(result.investors)), multilineFinancing(blankMissing(result.currentPreMoney)), multilineFinancing(blankMissing(result.currentFinancing)), multilineFinancing(blankMissing(result.financingDeadline)), blankMissing(result.mainBusiness), result.value, multilineFinancialResult(result.revenue), multilineFinancialResult(result.profit), sourceCell, "", "", notes];
         await appendExcel(template, outputFile, values);
-        return send(res, 200, { ok: true, message: `项目录入已生成：${outputFile}`, outputFile });
+        return send(res, 200, { ok: true, message: "项目录入预览已生成，请检查后确认加入总表", outputFile });
       }
       return send(res, 400, { ok: false, error: "未知生成任务" });
     }
     if (req.method === "POST" && requestUrl.pathname === "/api/intake/confirm") {
       const body = await bodyJson(req);
       const workspaceInfo = await inspectWorkspace(body.workspace);
-      const project = safeProjectName(body.project);
-      const outputRoot = path.resolve(String(body.outputPath || ""));
       const generatedFile = path.resolve(String(body.generatedFile || ""));
-      const expectedDir = path.join(outputRoot, project);
-      const relative = path.relative(expectedDir, generatedFile);
+      const pendingDir = path.resolve(path.join(dataDir, "pending-intakes"));
+      const relative = path.relative(pendingDir, generatedFile);
       if (!relative || relative.startsWith("..") || path.isAbsolute(relative) || !/\.xlsx$/i.test(generatedFile)) throw new Error("待确认的项目录入文件无效");
       await access(generatedFile, constants.R_OK);
       const masterName = workspaceInfo.excelFiles.find(name => name === "项目表录入.xlsx");
@@ -680,11 +686,12 @@ const server = createServer(async (req, res) => {
       try {
         await cp(generatedFile, temporaryFile);
         await rename(temporaryFile, masterFile);
+        await rm(generatedFile, { force: true });
       } catch (error) {
         await rm(temporaryFile, { force: true });
         throw error;
       }
-      return send(res, 200, { ok: true, message: `已确认录入总表：${masterFile}`, masterFile, backupFile });
+      return send(res, 200, { ok: true, message: "已确认加入项目总表", masterFile, backupFile });
     }
     if (req.method === "POST" && requestUrl.pathname === "/api/ai/config") {
       const body = await bodyJson(req);

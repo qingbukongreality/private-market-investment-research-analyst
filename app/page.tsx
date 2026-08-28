@@ -34,7 +34,7 @@ export default function Home(){
  async function generate(stage:string,fileMode=""){const started=Date.now(),controller=new AbortController();generationRequest.current=controller;setGenerationError("");setBusy(stage);try{let r=await fetch(api+"/api/project/metadata",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({workspace:path,name:project,meetingDate:date,participants:people,projectSource:source}),signal:controller.signal});let d=await r.json();if(!r.ok)throw Error(d.error);r=await fetch(api+"/api/stage/run",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({workspace:path,outputPath,project,stage,projectSource:source,fileMode}),signal:controller.signal});d=await r.json();if(r.status===409){setOverwriteStage(stage);return}if(!r.ok)throw Error(d.error);setCompleted(c=>({...c,[stage==="会议纪要"?"minutes":"intake"]:true}));setGeneratedFiles(current=>[{stage,path:d.outputFile,name:d.outputFile.split("/").pop(),time:new Date().toLocaleTimeString("zh-CN",{hour:"2-digit",minute:"2-digit"})},...current.filter(f=>f.stage!==stage)]);addLog({time:new Date().toLocaleString("zh-CN"),project,stage,status:"成功",detail:d.outputFile,duration:Math.round((Date.now()-started)/1000)});setNotice(d.message||stage+"已生成");await load()}catch(x){const message=x instanceof DOMException&&x.name==="AbortError"?`${stage}已中止`:x instanceof Error?x.message:"生成失败";addLog({time:new Date().toLocaleString("zh-CN"),project,stage,status:message.includes("已中止")?"中止":"失败",detail:message,duration:Math.round((Date.now()-started)/1000)});if(message.includes("已中止"))setNotice(message);else setGenerationError(message)}finally{generationRequest.current=null;setBusy("")}}
  function requestGeneration(stage:string){setGenerationError("");setPendingStage(stage)}
  function stopGeneration(){generationRequest.current?.abort()}
- async function commitIntake(){const filePath=confirmIntakeFile;if(!filePath)return;setBusy("confirmIntake");try{const r=await fetch(api+"/api/intake/confirm",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({workspace:path,outputPath,project,generatedFile:filePath})}),d=await r.json();if(!r.ok)throw Error(d.error);setGeneratedFiles(current=>current.map(file=>file.path===filePath?{...file,committed:true}:file));addLog({time:new Date().toLocaleString("zh-CN"),project,stage:"项目录入",status:"成功",detail:`已确认写入总表；备份：${d.backupFile}`});setConfirmIntakeFile("");setNotice("已写入原始项目总表，并自动备份原文件");await refreshAll()}catch(x){setGenerationError(x instanceof Error?x.message:"确认录入失败");setConfirmIntakeFile("")}finally{setBusy("")}}
+ async function commitIntake(){const filePath=confirmIntakeFile;if(!filePath)return;setBusy("confirmIntake");try{const r=await fetch(api+"/api/intake/confirm",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({workspace:path,generatedFile:filePath})}),d=await r.json();if(!r.ok)throw Error(d.error);setGeneratedFiles(current=>current.map(file=>file.path===filePath?{...file,path:d.masterFile,name:"项目表录入.xlsx",committed:true}:file));addLog({time:new Date().toLocaleString("zh-CN"),project,stage:"项目录入",status:"成功",detail:`已确认加入总表；备份：${d.backupFile}`});setConfirmIntakeFile("");setNotice("已加入项目总表，并自动备份原文件");await refreshAll()}catch(x){setGenerationError(x instanceof Error?x.message:"确认录入失败");setConfirmIntakeFile("")}finally{setBusy("")}}
  async function createProject(){const name=newProjectName.trim();if(!name)return;setBusy("newProject");try{const r=await fetch(api+"/api/project/create",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({workspace:path,name})}),d=await r.json();if(!r.ok)throw Error(d.error);setInfo(current=>current?{...current,projects:[...current.projects,name].sort((a,b)=>a.localeCompare(b,"zh-CN"))}:current);setProject(name);setNewProjectName("");setNewProjectOpen(false);setNotice(`已创建项目文件夹：${name}`)}catch(x){setGenerationError(x instanceof Error?x.message:"新建项目失败")}finally{setBusy("")}}
  function outputAction(action:"openOutput"|"revealOutput",filePath:string){const desktop=(window as Window&{dealflowDesktop?:{openOutput:(p:string)=>Promise<string>;revealOutput:(p:string)=>Promise<void>}}).dealflowDesktop;if(!desktop)return setNotice("此功能仅在 Mac App 中可用");desktop[action](filePath)}
 async function save(){setBusy("save");try{const replacingKey=!!key.trim(),changingModel=model!==savedModel,changingProvider=provider!==savedProvider;let r=await fetch(api+"/api/workspace/inspect",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({path:draft,save:true})}),d=await r.json();if(!r.ok)throw Error(d.error);r=await fetch(api+"/api/workspace/inspect",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({path:outputDraft})});d=await r.json();if(!r.ok)throw Error(`输出位置：${d.error}`);if(replacingKey||changingModel||changingProvider){r=await fetch(api+"/api/ai/config",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({apiKey:key,provider,model})});d=await r.json();if(!r.ok)throw Error(d.error);setAi(true);setSavedProvider(provider);setSavedModel(model)}localStorage.setItem("fengyuan-workspace-folder",draft);localStorage.setItem("fengyuan-output-folder",outputDraft);setPath(draft);setOutputPath(outputDraft);setKey("");setModal(false);setNotice(replacingKey||changingModel||changingProvider?"AI 服务商、密钥和模型已测试并保存":"设置已保存")}catch(x){setNotice(x instanceof Error?x.message:"保存失败")}finally{setBusy("")}}
@@ -198,7 +198,7 @@ async function save(){setBusy("save");try{const replacingKey=!!key.trim(),changi
 </span>
 <button onClick={()=>outputAction("openOutput",file.path)}>打开</button>
 <button onClick={()=>outputAction("revealOutput",file.path)}>Finder</button>
-{file.stage==="项目录入"&&<button className="commitButton" disabled={file.committed||busy==="confirmIntake"} onClick={()=>setConfirmIntakeFile(file.path)}>{file.committed?"已录入总表":"确认录入总表"}</button>}
+{file.stage==="项目录入"&&<button disabled={file.committed||busy==="confirmIntake"} onClick={()=>setConfirmIntakeFile(file.path)}>{file.committed?"已加入总表":"确认加入总表"}</button>}
 <button onClick={()=>requestGeneration(file.stage)}>重新生成</button>
 </div>)}</div>}<button className="logsButton" onClick={()=>setLogsOpen(!logsOpen)}>任务日志 <span>{logs.length}</span>
 </button>{logsOpen&&<div className="taskLogs">{logs.length?logs.map((log,i)=>
@@ -274,7 +274,7 @@ async function save(){setBusy("save");try{const replacingKey=!!key.trim(),changi
 <i>↗</i>
 <div>
 <b>文字材料将发送至 {savedProvider==="minimax"?"MiniMax":"DeepSeek"}</b>
-<p>用于分析并生成本次{pendingStage}。</p>
+<p>{pendingStage==="项目录入"?"先生成临时预览，确认后才加入总表。":"用于分析并生成本次会议纪要。"}</p>
 </div>
 </div>
 <div className="consentRows">
@@ -287,7 +287,7 @@ async function save(){setBusy("save");try{const replacingKey=!!key.trim(),changi
 <span>音频、图片、API Key、输入和输出文件夹路径</span>
 </p>
 </div>
-<small className="consentNote">请确认项目材料允许提交至你配置的 {savedProvider==="minimax"?"MiniMax":"DeepSeek"} API 账户。</small>
+<small className="consentNote">{pendingStage==="项目录入"?"生成预览不会修改总表；确认加入时会自动备份。":""} 请确认项目材料允许提交至你配置的 {savedProvider==="minimax"?"MiniMax":"DeepSeek"} API 账户。</small>
 <footer>
 <button onClick={()=>setPendingStage("")}>取消</button>
 <button className="dark" onClick={()=>{const stage=pendingStage;setPendingStage("");generate(stage)}}>确认并开始生成</button>
@@ -296,16 +296,13 @@ async function save(){setBusy("save");try{const replacingKey=!!key.trim(),changi
 </div>}{confirmIntakeFile&&<div className="modal">
 <section>
 <div className="modalTitle">
-<div>
-<small>CONFIRM INTAKE</small>
-<h2>确认写入项目总表</h2>
-</div>
+<div><small>CONFIRM INTAKE</small><h2>确认加入项目总表</h2></div>
 <button onClick={()=>setConfirmIntakeFile("")}>×</button>
 </div>
-<p className="overwriteText">确认后，本次生成的项目录入将写入输入根目录的《项目表录入.xlsx》。App 会先在同一目录自动备份当前总表。</p>
+<p className="overwriteText">请先打开并检查预览文件。确认后将更新输入根目录的《项目表录入.xlsx》，自动备份原总表，并删除临时预览。</p>
 <footer>
 <button onClick={()=>setConfirmIntakeFile("")}>取消</button>
-<button className="dark" disabled={busy==="confirmIntake"} onClick={commitIntake}>{busy==="confirmIntake"?"正在写入…":"确认录入"}</button>
+<button className="dark" disabled={busy==="confirmIntake"} onClick={commitIntake}>{busy==="confirmIntake"?"正在加入…":"确认加入"}</button>
 </footer>
 </section>
 </div>}{overwriteStage&&<div className="modal">
