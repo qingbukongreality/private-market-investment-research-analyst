@@ -389,6 +389,11 @@ function detailedInvestors(value) {
   }).filter(Boolean).join("\n");
 }
 
+function hasExplicitIpoPlan(materials) {
+  const text = String(materials || "");
+  return /(?:上市计划|IPO计划|计划上市|拟上市|筹备上市|上市申报|申报上市|启动IPO|推进IPO|IPO申报|辅导备案|上市辅导|(?:科创板|创业板|北交所|港股|美股)(?:上市|申报))/.test(text);
+}
+
 function blankMissing(value) {
   const text = String(value || "").trim();
   return /^(?:暂无(?:可靠)?(?:信息|披露|数据)?|未(?:披露|提及|说明|提供)|没有(?:披露|提及|说明)|材料中?未(?:披露|提及|说明)|待(?:补充|确认)|不详|无)$/.test(text) ? "" : text;
@@ -675,6 +680,7 @@ const server = createServer(async (req, res) => {
         const system = `${intakeInstructions}\n\n你必须完整执行以上Skill。只输出JSON，字段严格为 shortName,establishedDate,city,ipoPlan,previousRound,investors,currentPreMoney,currentFinancing,financingDeadline,mainBusiness,value,revenue,profit,notes。mainBusiness是唯一需要高度精简的产品字段，只写一句产品级短语，不展开型号、参数或状态。value必须严格按照“1.团队、2.股权结构、3.产品、4.技术、5.生产、客户、6.市场、7.收入”七段顺序，每段另起一行，标题文字和标点不得改写；某段无信息时只保留该段标题，不写任何缺失占位语。“1.团队”比其他段稍详细，写3-5位关键成员的姓名、岗位、相关学历或原单位、产业经历及具体分工，但不复制完整简历；“3.产品”必须详细，保留材料中具有实质信息的主要产品线、具体产品或型号、用途、关键参数及量产/供货/送样/在研状态，不得套用mainBusiness的精简限制，只删除完全重复或与主营无关的信息。investors（已投机构）必须尽量完整：按时间和轮次逐行写投资机构及投资金额，不得只保留一两个机构；材料明确机构但没有该轮具体投资金额时，在该行机构名称后写“未披露具体数额”。只有连投资机构本身也没有可靠信息时，investors才输出空字符串。previousRound、investors、currentPreMoney、currentFinancing、financingDeadline 中有多个融资轮次、机构、金额或事项时，使用JSON字符串中的\\n逐项换行，禁止用分号连写，也禁止输出可见的反斜杠和字母n。revenue和profit存在多个年份、实际/预计口径或多个事项时，也必须使用真正的换行逐项呈现。notes只允许写BP与会议纪要/录音之间无法消解的直接冲突，每个冲突以“冲突：”开头并在同一行明确写出BP口径和会议口径；没有此类冲突时notes必须为空字符串。除investors字段对已知机构但未知金额使用“未披露具体数额”外，任何字段无可靠信息都输出空字符串，严禁写“暂无披露、未披露、未提及、材料未说明、待补充、待确认、不详”等占位话术，也不写资料来源、一般缺失项或核查建议，禁止猜测。`;
         const styleSection = styleExample ? `\n\n总表最上面的第一条正式项目行（只模仿写法，禁止复制事实）：\n${styleExample}` : "";
         const result = await aiJson(`${system}\n现有总表的第一条正式项目行只用于模仿字段口径、句式、详略和换行；样例与显式规则冲突时，以显式规则为准。`, `项目：${details.name}\n项目来源：${body.projectSource || details.metadata.projectSource || "待补充"}\n生成日期：${new Date().toLocaleDateString("zh-CN")}${styleSection}\n\n当前项目材料（唯一事实来源）：${materials}`, 12000, generationAbort.signal);
+        if (!hasExplicitIpoPlan(materials)) result.ipoPlan = "";
         result.value = String(result.value || "")
           .replace(/([1-7])\s*[.．、]\s*/g, "$1.")
           .replace(/5\.生产(?:和|及|、)客户/g, "5.生产、客户")
