@@ -68,7 +68,7 @@ Do not force topics that were not discussed.
 - Keep the company's reasoning even when it is subjective, but label forecasts as forecasts.
 - Never end with a generic verification/diligence checklist question. Verification belongs in internal analysis, not the Q&A artifact.
 - Create a sequential coverage ledger before writing Q&A. At minimum, record every substantive question, follow-up, named entity, number, unit, date, product/model, technical parameter, customer stage, financing term, forecast and limitation.
-- After drafting, compare the Q&A against this ledger. Structural validity alone is insufficient: if the information-bearing Q&A text is under roughly 55% of its source chunk, treat that as an omission warning and run one source-grounded completion pass. Character count remains a warning signal rather than permission to pad text or reject the full memo by itself.
+- After drafting, compare the Q&A against this ledger. Do not impose a mandatory character-retention ratio or automatically run a second completion request solely because a chunk is short. Character count is only a review signal and never permission to pad text.
 - Do not merge follow-ups that add a new fact, example, calculation, exception or qualification.
 - Do not create omnibus questions that combine unrelated topics merely to reduce the number of Q&A pairs. Company history, team, product architecture, customers, market, financials and financing must remain separate when the conversation treats them separately.
 - Q and A must be ordinary prose paragraphs. `【】` labels, Markdown bullets, numbered outlines and embedded mini-headings are prohibited.

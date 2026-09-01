@@ -674,20 +674,13 @@ const server = createServer(async (req, res) => {
         async function processTranscriptChunk(index) {
           const chunk = transcriptChunks[index];
           const qaResult = await aiJson(`${meetingInstructions}\n\n只处理当前访谈片段，生成最终会议纪要“访谈记录”所需的Q&A。只输出JSON字段qa。这是一份忠实的书面化访谈整理稿，不是摘要。必须从头到尾识别并保留原文中的每一个提问、追问、反问式确认和由回答者主动展开的新问题；不得因为问题相似、答案较短或主题相同而省略，也不得把多个问题合并成一个概括性问题。每个回答应按原发言顺序尽量保留全部有意义内容，包括事实、背景、原因、过程、判断依据、例子、比较、计算、数字、单位、年份、客户、产品、参数、合作阶段、预测条件、例外和不确定性；只删除“嗯、啊、呃、然后、就是说、这个、那个、对吧”等无信息口头禅、寒暄、重复起句、结巴和不改变含义的重复。把口语改成通顺的书面中文，但不得缩写、概括或改写成结论摘要。使用实体对照表核对姓名和“博士、总”等称谓；只有读音、角色和参考材料能够相互印证时才纠正，不能确认时保留原称谓或写“姓名待确认”。实体对照表仅用于文字校正，不得把BP中未在访谈出现的事实补进Q&A。对夸大或绝对化判断保留具体事实并增加公司归因、细分范围和阶段限定。绝对禁止在Q或A中出现“当前片段、本段、下一段生成、继续处理、下一个片段、以上内容、后续片段、剩余内容”等模型分段或生成流程话术；片段边界对最终读者必须完全不可见。Q和A只写连贯、专业的书面中文，不使用【】、Markdown项目符号、编号提纲或段内小标题。不得添加材料没有的问题或泛化收尾问题。`, `公司：${details.name}\n当前为第${index + 1}/${transcriptChunks.length}个连续片段；只处理本片段，不概括其他片段。\n\n姓名、称谓及术语对照表（只用于纠错）：\n${entityReferenceText}\n\n录音原文片段：\n${chunk}`, 16000, generationAbort.signal);
-          let chunkQA = cleanQAItems(qaResult.qa);
-          const desiredLength = Math.floor(chunk.length * 0.55);
-          if (qaInformationLength(chunkQA) < desiredLength) {
-            const expanded = await aiJson(`${meetingInstructions}\n\n你正在执行Q&A明显缺失补全。只输出JSON字段qa。根据原始连续访谈片段补回初稿遗漏的事实、解释、例子、追问、数字、参数、比较、客户阶段、预测条件和限定；不同事实或追问应拆成独立Q&A。扩充只能来自原始片段，不得凭空扩写或用口头禅凑长度。继续按照实体对照表核对姓名、博士/总等称谓和术语；仅在读音、角色和材料能够印证时纠正。禁止【】、Markdown项目符号和编号提纲。`, `公司：${details.name}\n片段 ${index + 1}/${transcriptChunks.length}\n\n姓名、称谓及术语对照表：\n${entityReferenceText}\n\n原始片段：\n${chunk}\n\n初稿：\n${JSON.stringify({ qa: chunkQA })}`, 18000, generationAbort.signal);
-            const expandedQA = cleanQAItems(expanded.qa);
-            if (qaInformationLength(expandedQA) > qaInformationLength(chunkQA)) chunkQA = expandedQA;
-          }
+          const chunkQA = cleanQAItems(qaResult.qa);
           if (!chunkQA.length) throw new Error(`第${index + 1}段访谈未生成有效Q&A，请重试`);
           return chunkQA;
         }
-        for (let start = 0; start < transcriptChunks.length; start += 2) {
-          const indexes = Array.from({ length: Math.min(2, transcriptChunks.length - start) }, (_, offset) => start + offset);
-          const batchResults = await Promise.all(indexes.map(processTranscriptChunk));
-          for (const chunkQA of batchResults) qa.push(...chunkQA);
+        for (let index = 0; index < transcriptChunks.length; index++) {
+          const chunkQA = await processTranscriptChunk(index);
+          qa.push(...chunkQA);
         }
         for (const key of ["companyPosition", "product", "marketSituation", "coreCustomers", "coreTechnology", "differentiation", "financials", "historicalFinancing", "currentRound", "developmentPlan"]) result[key] = cleanMemoBody(result[key]);
         if (!qa.length) throw new Error("没有生成有效的访谈记录，请检查录音原文是否可读取");
