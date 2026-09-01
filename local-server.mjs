@@ -59,9 +59,24 @@ function providerInfo(provider) {
     : { name: "DeepSeek", url: "https://api.deepseek.com/chat/completions", models: new Set(["deepseek-v4-pro", "deepseek-v4-flash"]) };
 }
 
+async function fetchWithNetworkRetry(url, options, attempts = 3) {
+  let lastError;
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      return await fetch(url, options);
+    } catch (error) {
+      if (options?.signal?.aborted) throw error;
+      lastError = error;
+      if (attempt < attempts) await new Promise(resolve => setTimeout(resolve, attempt * 1000));
+    }
+  }
+  const detail = lastError instanceof Error && lastError.cause instanceof Error ? lastError.cause.message : lastError instanceof Error ? lastError.message : "未知网络错误";
+  throw new Error(`连接 AI 服务连续 ${attempts} 次失败：${detail}`);
+}
+
 async function testAI(provider, apiKey, model) {
   const target = providerInfo(provider);
-  const response = await fetch(target.url, {
+  const response = await fetchWithNetworkRetry(target.url, {
     method: "POST",
     headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
     body: JSON.stringify({ model, messages: [{ role: "system", content: "只回答 OK。" }, { role: "user", content: "连接测试" }], ...(provider === "minimax" ? { max_completion_tokens: 64, reasoning_split: false } : { max_tokens: 16 }), stream: false }),
@@ -227,7 +242,7 @@ async function miniMaxUnderstandImage(filePath, label = path.basename(filePath))
     }
     const buffer = await readFile(prepared);
     const mime = path.extname(prepared).toLowerCase() === ".png" ? "image/png" : path.extname(prepared).toLowerCase() === ".webp" ? "image/webp" : "image/jpeg";
-    const response = await fetch("https://api.minimaxi.com/v1/coding_plan/vlm", {
+    const response = await fetchWithNetworkRetry("https://api.minimaxi.com/v1/coding_plan/vlm", {
       method: "POST",
       headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json", "MM-API-Source": "FengYuan-Workbench" },
       body: JSON.stringify({ prompt: imagePrompt(label), image_url: `data:${mime};base64,${buffer.toString("base64")}` })
@@ -474,7 +489,7 @@ async function aiJson(system, prompt, maxTokens = 12000, signal, attempt = 0) {
     }
   };
   const requestBody = { model: aiConfig.model, messages: [{ role: "system", content: `${system}\n${aiConfig.provider === "minimax" ? "必须立即调用 submit_result 工具提交最终结果，不要在普通回复中输出结果。" : "只返回一个合法JSON对象，不要使用Markdown代码块。JSON字符串中的换行必须写成\\n，禁止直接换行。"}` }, { role: "user", content: safePrompt }], temperature: aiConfig.provider === "minimax" ? 0.2 : undefined, ...(aiConfig.provider === "minimax" ? { max_completion_tokens: maxTokens, reasoning_split: false, tools: [structuredTool], tool_choice: { type: "function", function: { name: "submit_result" } } } : { max_tokens: maxTokens, response_format: { type: "json_object" } }), stream: false };
-  const response = await fetch(target.url, { method: "POST", headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" }, body: JSON.stringify(requestBody), signal });
+  const response = await fetchWithNetworkRetry(target.url, { method: "POST", headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" }, body: JSON.stringify(requestBody), signal });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(data?.error?.message || `${target.name} 返回 ${response.status}`);
   const toolArguments = data?.choices?.[0]?.message?.tool_calls?.find(call => call?.function?.name === "submit_result")?.function?.arguments;
@@ -486,7 +501,7 @@ async function aiJson(system, prompt, maxTokens = 12000, signal, attempt = 0) {
   if (!repairCandidate) throw new Error(`${target.name} 未返回正文，请重试`);
   try { return parseAIJson(content); } catch {}
   if (aiConfig.provider !== "minimax") throw new Error(`${target.name} 返回内容无法解析，请重试`);
-  const repairResponse = await fetch(target.url, { method: "POST", headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" }, body: JSON.stringify({ model: aiConfig.model, messages: [{ role: "system", content: "你是JSON修复器。保持全部原始信息，只修复JSON语法。只输出一个合法JSON对象，字符串内换行写成\\n。" }, { role: "user", content: repairCandidate }], temperature: 0.1, max_completion_tokens: maxTokens, reasoning_split: false, stream: false }), signal });
+  const repairResponse = await fetchWithNetworkRetry(target.url, { method: "POST", headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" }, body: JSON.stringify({ model: aiConfig.model, messages: [{ role: "system", content: "你是JSON修复器。保持全部原始信息，只修复JSON语法。只输出一个合法JSON对象，字符串内换行写成\\n。" }, { role: "user", content: repairCandidate }], temperature: 0.1, max_completion_tokens: maxTokens, reasoning_split: false, stream: false }), signal });
   const repairData = await repairResponse.json().catch(() => ({}));
   if (!repairResponse.ok) throw new Error(repairData?.error?.message || `${target.name} JSON修复失败`);
   try { return parseAIJson(repairData?.choices?.[0]?.message?.content); } catch {
