@@ -64,7 +64,7 @@ async function testAI(provider, apiKey, model) {
   const response = await fetch(target.url, {
     method: "POST",
     headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ model, messages: [{ role: "system", content: "只回答 OK。" }, { role: "user", content: "连接测试" }], ...(provider === "minimax" ? { max_completion_tokens: 16, reasoning_split: true } : { max_tokens: 16 }), stream: false }),
+    body: JSON.stringify({ model, messages: [{ role: "system", content: "只回答 OK。" }, { role: "user", content: "连接测试" }], ...(provider === "minimax" ? { max_completion_tokens: 64, reasoning_split: false } : { max_tokens: 16 }), stream: false }),
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(data?.error?.message || `${target.name} 返回 ${response.status}`);
@@ -473,14 +473,15 @@ async function aiJson(system, prompt, maxTokens = 12000, signal) {
       }
     }
   };
-  const requestBody = { model: aiConfig.model, messages: [{ role: "system", content: `${system}\n${aiConfig.provider === "minimax" ? "必须调用 submit_result 工具提交最终结果，不要在普通回复中输出结果。" : "只返回一个合法JSON对象，不要使用Markdown代码块。JSON字符串中的换行必须写成\\n，禁止直接换行。"}` }, { role: "user", content: safePrompt }], temperature: aiConfig.provider === "minimax" ? 0.2 : undefined, ...(aiConfig.provider === "minimax" ? { max_completion_tokens: maxTokens, reasoning_split: true, tools: [structuredTool], tool_choice: "auto" } : { max_tokens: maxTokens, response_format: { type: "json_object" } }), stream: false };
+  const requestBody = { model: aiConfig.model, messages: [{ role: "system", content: `${system}\n${aiConfig.provider === "minimax" ? "必须立即调用 submit_result 工具提交最终结果，不要在普通回复中输出结果。" : "只返回一个合法JSON对象，不要使用Markdown代码块。JSON字符串中的换行必须写成\\n，禁止直接换行。"}` }, { role: "user", content: safePrompt }], temperature: aiConfig.provider === "minimax" ? 0.2 : undefined, ...(aiConfig.provider === "minimax" ? { max_completion_tokens: maxTokens, reasoning_split: false, tools: [structuredTool], tool_choice: { type: "function", function: { name: "submit_result" } } } : { max_tokens: maxTokens, response_format: { type: "json_object" } }), stream: false };
   const response = await fetch(target.url, { method: "POST", headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" }, body: JSON.stringify(requestBody), signal });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(data?.error?.message || `${target.name} 返回 ${response.status}`);
   const toolArguments = data?.choices?.[0]?.message?.tool_calls?.find(call => call?.function?.name === "submit_result")?.function?.arguments;
   if (toolArguments) try { return parseAIJson(toolArguments); } catch {}
   const content = String(data?.choices?.[0]?.message?.content || "").trim();
-  if (!content) throw new Error(`${target.name} 未返回内容`);
+  if (!content && data?.choices?.[0]?.finish_reason === "length") throw new Error(`${target.name} 输出达到长度上限且未生成正文，请重试；如仍失败请切换高速模型或减少单次材料量`);
+  if (!content) throw new Error(`${target.name} 未返回正文，请重试`);
   try { return parseAIJson(content); } catch {}
   if (data?.choices?.[0]?.finish_reason === "length") throw new Error(`${target.name} 输出达到长度上限，请减少单次材料量或改用更高输出额度`);
   if (aiConfig.provider !== "minimax") throw new Error(`${target.name} 返回内容无法解析，请重试`);
