@@ -29,12 +29,12 @@ Treat the folder as the project boundary. Preserve all user inputs and unrelated
 
 ### 1. Correct the transcript
 
-- Before correcting any transcript chunk, build one shared entity glossary from the BP, company introduction and team materials. At minimum record each person's standard name, role and supported forms of address such as `某博士` or `某总`, together with company, customer, product, technology and abbreviation spellings. Reuse the same glossary for every chunk.
+- Before correcting any transcript chunk, build one shared entity glossary from the BP, company introduction and team materials. At minimum record each person's standard name, role and supported forms of address such as `某博士` or `某总`, together with company, customer, product, technology and abbreviation spellings. For names and roles, written BP/company team pages take priority over phonetic transcript guesses. If written sources conflict, keep the more authoritative spelling and flag the conflict rather than inventing a merged name or role. Reuse the same glossary for every chunk.
 - Cross-check ASR-rendered names and forms of address against that glossary. Correct `某某博士`, `某某总`, `某总`, `X博` and similar homophones only when pronunciation, conversational role and reference material agree. If they do not agree, retain the original form of address or mark the name as unconfirmed; never guess a person.
 - The glossary is a correction aid only. Do not insert a BP person, title or fact into Q&A unless the interview itself refers to it.
 - Preserve every speaker label, timestamp and substantive statement.
 - Correct speech-recognition errors, punctuation, sentence boundaries, duplicated stutters, product names, English abbreviations, people, customers, units and figures.
-- Use the BP only to resolve obvious recognition errors. Do not replace what the speaker actually said with BP claims.
+- Use BP/company-introduction written spellings as the primary authority for names, titles, company names, product names, technologies and professional terms. Correct transcript homophones and ASR errors to those written forms whenever the referenced person or entity can be matched. This correction rule does not authorize replacing interview facts, numbers or opinions with BP claims.
 - Do not summarize or silently delete information.
 - When audio is available and a phrase materially affects facts, listen to the relevant segment if the environment supports it.
 - Save as `修正.docx`.
@@ -60,8 +60,8 @@ Treat the folder as the project boundary. Preserve all user inputs and unrelated
 
 ### 3. Create the meeting memo
 
-- Use the corrected transcript as the primary factual source and the BP as supplementary background.
-- If transcript and BP conflict, use the transcript figure or stage. Do not describe the conflict-resolution process in the memo.
+- For names, roles and terminology, use the BP/company introduction as the primary correction source. For what was actually asked, answered, claimed, quantified or qualified during the meeting, use the corrected transcript as the primary source and the BP as supplementary background.
+- If transcript and BP conflict on a substantive fact, number or stage, do not silently replace either side. The meeting memo should accurately state the meeting account; preserve the discrepancy for downstream project-intake notes.
 - Write objectively. Separate completed delivery, customer testing, expected orders, forecasts and long-term plans.
 - Do not overstate “领先”“唯一”“垄断”“已量产”“已进入供应链” unless directly supported and appropriately qualified.
 - Avoid promotional or absolute language even when it appears in a BP or management statement. Do not write `绝对龙头`, `完全垄断`, `国内唯一`, `遥遥领先`, `完全替代`, `必然爆发`, `确定性极强` or similar wording as an objective conclusion. Preserve the underlying fact with scope, stage and attribution, for example `公司表示其在LED PSS领域市场份额较高`, `已向部分客户交付`, or `在部分工序具备替代可能`.

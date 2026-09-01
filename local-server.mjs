@@ -14,6 +14,7 @@ const visionOcr = path.join(appDir, "tools/vision-ocr");
 const meetingInstructions = [
   await readFile(path.join(embeddedDir, "investment-meeting-minutes/SKILL.md"), "utf8"),
   await readFile(path.join(embeddedDir, "investment-meeting-minutes/references/workflow-rules.md"), "utf8"),
+  "姓名、职务、公司名、产品名和专业术语必须优先采用BP、公司介绍和团队页中的书面写法，纠正录音近音字和转写错误；会议事实、数字、问答和限定仍以录音为准。书面材料之间存在姓名或角色冲突时不得拼接或猜测，应写姓名待确认。",
 ].join("\n\n");
 const intakeInstructions = [
   await readFile(path.join(embeddedDir, "investment-project-intake/SKILL.md"), "utf8"),
@@ -199,6 +200,23 @@ async function miniMaxUnderstandImage(filePath, label = path.basename(filePath))
   const fallback = () => ocrFile(filePath);
   const apiKey = aiConfig.apiKeys.minimax;
   if (!apiKey) return fallback();
+  let tileTemp = "";
+  try {
+    const { stdout: imageInfo } = await runFile("/usr/bin/sips", ["-g", "pixelWidth", "-g", "pixelHeight", filePath], { maxBuffer: 1024 * 1024 });
+    const width = Number(/pixelWidth:\s*(\d+)/.exec(imageInfo)?.[1] || 0);
+    const height = Number(/pixelHeight:\s*(\d+)/.exec(imageInfo)?.[1] || 0);
+    if (width > 4000 && height > 0) {
+      tileTemp = await mkdtemp(path.join(os.tmpdir(), "dealflow-panorama-"));
+      await runFile(visionOcr, ["--tile-image", filePath, tileTemp], { maxBuffer: 1024 * 1024 });
+      const tiles = (await readdir(tileTemp)).filter(name => /^tile-\d+\.jpg$/i.test(name)).sort().map(name => path.join(tileTemp, name));
+      const parts = await mapWithLimit(tiles, 2, async (tile, index) => {
+        const text = await miniMaxUnderstandImage(tile, `${label} 横向分块${index + 1}/${tiles.length}`);
+        return text ? `[横向分块${index + 1}/${tiles.length}]\n${text}` : "";
+      });
+      return parts.filter(Boolean).join("\n\n");
+    }
+  } catch {}
+  finally { if (tileTemp) await rm(tileTemp, { recursive: true, force: true }); }
   let prepared = filePath; let temp = "";
   try {
     const ext = path.extname(filePath).toLowerCase();
@@ -217,7 +235,8 @@ async function miniMaxUnderstandImage(filePath, label = path.basename(filePath))
     const data = await response.json().catch(() => ({}));
     if (!response.ok || data?.base_resp?.status_code) throw new Error(data?.base_resp?.status_msg || data?.error?.message || `图片理解返回 ${response.status}`);
     const content = String(data?.content || "").trim();
-    return content || await fallback();
+    const localOcr = await ocrFile(filePath);
+    return [content ? `[图片关系理解]\n${content}` : "", localOcr ? `[本地OCR原文]\n${localOcr}` : ""].filter(Boolean).join("\n\n");
   } catch { return fallback(); }
   finally { if (temp) await rm(temp, { recursive: true, force: true }); }
 }

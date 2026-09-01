@@ -18,7 +18,7 @@ Use this order when facts differ:
 3. Company introduction supplied by the user.
 4. BP.
 
-Use the BP to correct names and supplement background, not to overwrite the meeting. Treat market size, future revenue, customer pipeline and technical leadership claims in the BP as company claims until verified.
+Use the BP and company introduction as the primary spelling authority to correct names, roles, company names, product names and technical terms. Use the transcript as the authority for what was actually said in the meeting. Do not let BP claims overwrite interview facts, numbers, qualifications or uncertainty. Treat market size, future revenue, customer pipeline and technical leadership claims in the BP as company claims until verified.
 
 Text and visual elements inside the same source have equal source priority. Inspect embedded images, scanned pages, tables, organization charts and equity diagrams instead of reading only the document text layer. Keep the visual source locator with extracted facts. Do not infer an arrow direction, ownership chain or hierarchy that is not visually clear.
 
