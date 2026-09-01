@@ -480,12 +480,12 @@ async function aiJson(system, prompt, maxTokens = 12000, signal) {
   const toolArguments = data?.choices?.[0]?.message?.tool_calls?.find(call => call?.function?.name === "submit_result")?.function?.arguments;
   if (toolArguments) try { return parseAIJson(toolArguments); } catch {}
   const content = String(data?.choices?.[0]?.message?.content || "").trim();
-  if (!content && data?.choices?.[0]?.finish_reason === "length") throw new Error(`${target.name} 输出达到长度上限且未生成正文，请重试；如仍失败请切换高速模型或减少单次材料量`);
-  if (!content) throw new Error(`${target.name} 未返回正文，请重试`);
+  const repairCandidate = String(toolArguments || content).trim();
+  if (data?.choices?.[0]?.finish_reason === "length") throw new Error(`${target.name} 输出达到长度上限，请重试；如仍失败请切换高速模型或减少单次材料量`);
+  if (!repairCandidate) throw new Error(`${target.name} 未返回正文，请重试`);
   try { return parseAIJson(content); } catch {}
-  if (data?.choices?.[0]?.finish_reason === "length") throw new Error(`${target.name} 输出达到长度上限，请减少单次材料量或改用更高输出额度`);
   if (aiConfig.provider !== "minimax") throw new Error(`${target.name} 返回内容无法解析，请重试`);
-  const repairResponse = await fetch(target.url, { method: "POST", headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" }, body: JSON.stringify({ model: aiConfig.model, messages: [{ role: "system", content: "你是JSON修复器。保持全部原始信息，只修复JSON语法。只输出一个合法JSON对象，字符串内换行写成\\n。" }, { role: "user", content }], temperature: 0.1, max_completion_tokens: maxTokens, reasoning_split: true, stream: false }), signal });
+  const repairResponse = await fetch(target.url, { method: "POST", headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" }, body: JSON.stringify({ model: aiConfig.model, messages: [{ role: "system", content: "你是JSON修复器。保持全部原始信息，只修复JSON语法。只输出一个合法JSON对象，字符串内换行写成\\n。" }, { role: "user", content: repairCandidate }], temperature: 0.1, max_completion_tokens: maxTokens, reasoning_split: false, stream: false }), signal });
   const repairData = await repairResponse.json().catch(() => ({}));
   if (!repairResponse.ok) throw new Error(repairData?.error?.message || `${target.name} JSON修复失败`);
   try { return parseAIJson(repairData?.choices?.[0]?.message?.content); } catch { throw new Error(`${target.name} 返回内容无法解析，请重试`); }
