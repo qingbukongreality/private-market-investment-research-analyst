@@ -37,7 +37,7 @@ In App mode, MiniMax image understanding is the primary visual reader for every 
 - Keep uncertainty when the audio itself is uncertain; do not invent the missing fact.
 - Ensure corrected text length remains reasonably close to the original after removing only meaningless repetition.
 - Preserve paragraph breaks and speaker/timestamp boundaries during extraction and correction. Flattening all text into a continuous paragraph is prohibited.
-- For long transcripts, divide at a natural speaker, timestamp or paragraph boundary. Use overlap at chunk boundaries and deduplicate only exact repeated boundary text after merging.
+- For long transcripts, target about 3,000 Chinese characters per chunk and divide at the nearest natural speaker, timestamp or paragraph boundary. Use overlap at chunk boundaries and deduplicate only exact repeated boundary text after merging.
 
 ## 3. Detailed Q&A
 
@@ -68,7 +68,7 @@ Do not force topics that were not discussed.
 - Keep the company's reasoning even when it is subjective, but label forecasts as forecasts.
 - Never end with a generic verification/diligence checklist question. Verification belongs in internal analysis, not the Q&A artifact.
 - Create a sequential coverage ledger before writing Q&A. At minimum, record every substantive question, follow-up, named entity, number, unit, date, product/model, technical parameter, customer stage, financing term, forecast and limitation.
-- After drafting, compare the Q&A against this ledger. Structural validity alone is insufficient: an obviously short Q&A may receive one completion pass. Character count is only a warning signal and must never by itself reject the full memo.
+- After drafting, compare the Q&A against this ledger. Structural validity alone is insufficient: if the information-bearing Q&A text is under roughly 55% of its source chunk, treat that as an omission warning and run one source-grounded completion pass. Character count remains a warning signal rather than permission to pad text or reject the full memo by itself.
 - Do not merge follow-ups that add a new fact, example, calculation, exception or qualification.
 - Do not create omnibus questions that combine unrelated topics merely to reduce the number of Q&A pairs. Company history, team, product architecture, customers, market, financials and financing must remain separate when the conversation treats them separately.
 - Q and A must be ordinary prose paragraphs. `【】` labels, Markdown bullets, numbered outlines and embedded mini-headings are prohibited.
