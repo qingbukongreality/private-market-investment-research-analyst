@@ -453,7 +453,7 @@ function parseAIJson(raw) {
   return JSON.parse(repaired);
 }
 
-async function aiJson(system, prompt, maxTokens = 12000, signal) {
+async function aiJson(system, prompt, maxTokens = 12000, signal, attempt = 0) {
   const target = providerInfo(aiConfig.provider);
   const apiKey = aiConfig.apiKeys[aiConfig.provider];
   const safePrompt = aiConfig.provider === "minimax" ? prompt.slice(0, 165000) : prompt;
@@ -478,6 +478,7 @@ async function aiJson(system, prompt, maxTokens = 12000, signal) {
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(data?.error?.message || `${target.name} 返回 ${response.status}`);
   const toolArguments = data?.choices?.[0]?.message?.tool_calls?.find(call => call?.function?.name === "submit_result")?.function?.arguments;
+  if (toolArguments && typeof toolArguments === "object") return toolArguments;
   if (toolArguments) try { return parseAIJson(toolArguments); } catch {}
   const content = String(data?.choices?.[0]?.message?.content || "").trim();
   const repairCandidate = String(toolArguments || content).trim();
@@ -488,7 +489,10 @@ async function aiJson(system, prompt, maxTokens = 12000, signal) {
   const repairResponse = await fetch(target.url, { method: "POST", headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" }, body: JSON.stringify({ model: aiConfig.model, messages: [{ role: "system", content: "你是JSON修复器。保持全部原始信息，只修复JSON语法。只输出一个合法JSON对象，字符串内换行写成\\n。" }, { role: "user", content: repairCandidate }], temperature: 0.1, max_completion_tokens: maxTokens, reasoning_split: false, stream: false }), signal });
   const repairData = await repairResponse.json().catch(() => ({}));
   if (!repairResponse.ok) throw new Error(repairData?.error?.message || `${target.name} JSON修复失败`);
-  try { return parseAIJson(repairData?.choices?.[0]?.message?.content); } catch { throw new Error(`${target.name} 返回内容无法解析，请重试`); }
+  try { return parseAIJson(repairData?.choices?.[0]?.message?.content); } catch {
+    if (attempt < 1) return aiJson(system, prompt, maxTokens, signal, attempt + 1);
+    throw new Error(`${target.name} 连续两次返回无法解析的内容，请切换 MiniMax M2.7 Highspeed 后重试`);
+  }
 }
 
 function wordParagraph(text = "", style = "1", options = {}) {
