@@ -63,7 +63,19 @@ async function fetchWithNetworkRetry(url, options, attempts = 3) {
   let lastError;
   for (let attempt = 1; attempt <= attempts; attempt++) {
     try {
-      return await fetch(url, options);
+      const response = await fetch(url, options);
+      const retryableStatus = response.status === 429 || response.status >= 500;
+      let providerBusy = false;
+      try {
+        const preview = await response.clone().json();
+        const code = preview?.error?.code ?? preview?.base_resp?.status_code ?? preview?.status_code;
+        providerBusy = Number(code) === 2064 || /(?:2064|服务器短暂繁忙|高峰时段)/.test(JSON.stringify(preview));
+      } catch {}
+      if ((retryableStatus || providerBusy) && attempt < attempts) {
+        await new Promise(resolve => setTimeout(resolve, attempt === 1 ? 10000 : 30000));
+        continue;
+      }
+      return response;
     } catch (error) {
       if (options?.signal?.aborted) throw error;
       lastError = error;
@@ -82,7 +94,8 @@ async function testAI(provider, apiKey, model) {
     body: JSON.stringify({ model, messages: [{ role: "system", content: "只回答 OK。" }, { role: "user", content: "连接测试" }], ...(provider === "minimax" ? { max_completion_tokens: 64, reasoning_split: false } : { max_tokens: 16 }), stream: false }),
   });
   const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data?.error?.message || `${target.name} 返回 ${response.status}`);
+  const apiError = data?.error?.message || data?.base_resp?.status_msg;
+  if (!response.ok || (apiError && !data?.choices?.length)) throw new Error(apiError || `${target.name} 返回 ${response.status}`);
   return true;
 }
 
@@ -503,7 +516,8 @@ async function aiJson(system, prompt, maxTokens = 12000, signal, attempt = 0) {
   const requestBody = { model: aiConfig.model, messages: [{ role: "system", content: `${system}\n${aiConfig.provider === "minimax" ? "必须立即调用 submit_result 工具提交最终结果，不要在普通回复中输出结果。" : "只返回一个合法JSON对象，不要使用Markdown代码块。JSON字符串中的换行必须写成\\n，禁止直接换行。"}` }, { role: "user", content: safePrompt }], temperature: aiConfig.provider === "minimax" ? 0.2 : undefined, ...(aiConfig.provider === "minimax" ? { max_completion_tokens: maxTokens, reasoning_split: false, tools: [structuredTool], tool_choice: { type: "function", function: { name: "submit_result" } } } : { max_tokens: maxTokens, response_format: { type: "json_object" } }), stream: false };
   const response = await fetchWithNetworkRetry(target.url, { method: "POST", headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" }, body: JSON.stringify(requestBody), signal });
   const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data?.error?.message || `${target.name} 返回 ${response.status}`);
+  const apiError = data?.error?.message || data?.base_resp?.status_msg;
+  if (!response.ok || (apiError && !data?.choices?.length)) throw new Error(apiError || `${target.name} 返回 ${response.status}`);
   const toolArguments = data?.choices?.[0]?.message?.tool_calls?.find(call => call?.function?.name === "submit_result")?.function?.arguments;
   if (toolArguments && typeof toolArguments === "object") return toolArguments;
   if (toolArguments) try { return parseAIJson(toolArguments); } catch {}
