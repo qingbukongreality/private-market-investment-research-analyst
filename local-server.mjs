@@ -472,6 +472,21 @@ async function aiJson(system, prompt, maxTokens = 12000, signal, attempt = 0) {
   const target = providerInfo(aiConfig.provider);
   const apiKey = aiConfig.apiKeys[aiConfig.provider];
   const safePrompt = aiConfig.provider === "minimax" ? prompt.slice(0, 165000) : prompt;
+  const memoProperties = {
+    companyPosition: { type: "string" }, product: { type: "string" }, marketSituation: { type: "string" }, coreCustomers: { type: "string" }, coreTechnology: { type: "string" }, differentiation: { type: "string" }, financials: { type: "string" }, historicalFinancing: { type: "string" }, currentRound: { type: "string" }, developmentPlan: { type: "string" }
+  };
+  const qaProperties = { qa: { type: "array", items: { type: "object", properties: { q: { type: "string" }, a: { type: "string" } }, required: ["q", "a"], additionalProperties: false } } };
+  const entityProperties = {
+    people: { type: "array", items: { type: "object", properties: { name: { type: "string" }, title: { type: "string" }, aliases: { type: "array", items: { type: "string" } } }, required: ["name", "title", "aliases"], additionalProperties: false } },
+    organizations: { type: "array", items: { type: "string" } }, products: { type: "array", items: { type: "string" } }, terms: { type: "array", items: { type: "string" } }
+  };
+  const intakeProperties = {
+    shortName: { type: "string" }, establishedDate: { type: "string" }, city: { type: "string" }, ipoPlan: { type: "string" }, previousRound: { type: "string" }, investors: { type: "string" }, currentPreMoney: { type: "string" }, currentFinancing: { type: "string" }, financingDeadline: { type: "string" }, mainBusiness: { type: "string" }, value: { type: "string" }, revenue: { type: "string" }, profit: { type: "string" }, notes: { type: "string" }
+  };
+  const isQA = /只处理当前访谈片段|Q&A明显缺失补全/.test(system);
+  const isEntity = /只建立会议文字校正所需的实体对照表/.test(system);
+  const isIntake = /字段严格为 shortName|shortName,establishedDate/.test(system);
+  const toolProperties = isQA ? qaProperties : isEntity ? entityProperties : isIntake ? intakeProperties : memoProperties;
   const structuredTool = {
     type: "function",
     function: {
@@ -479,11 +494,8 @@ async function aiJson(system, prompt, maxTokens = 12000, signal, attempt = 0) {
       description: "提交最终结构化结果。必须保留材料中的完整事实与数字。",
       parameters: {
         type: "object",
-        properties: {
-          companyPosition: { type: "string" }, product: { type: "string" }, marketSituation: { type: "string" }, coreCustomers: { type: "string" }, coreTechnology: { type: "string" }, differentiation: { type: "string" }, financials: { type: "string" }, historicalFinancing: { type: "string" }, currentRound: { type: "string" }, developmentPlan: { type: "string" },
-          qa: { type: "array", items: { type: "object", properties: { q: { type: "string" }, a: { type: "string" } }, required: ["q", "a"] } },
-          shortName: { type: "string" }, establishedDate: { type: "string" }, city: { type: "string" }, ipoPlan: { type: "string" }, previousRound: { type: "string" }, investors: { type: "string" }, currentPreMoney: { type: "string" }, currentFinancing: { type: "string" }, financingDeadline: { type: "string" }, mainBusiness: { type: "string" }, value: { type: "string" }, revenue: { type: "string" }, profit: { type: "string" }, notes: { type: "string" }
-        },
+        properties: toolProperties,
+        required: Object.keys(toolProperties),
         additionalProperties: false
       }
     }
