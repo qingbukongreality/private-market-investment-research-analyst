@@ -60,6 +60,10 @@ Treat the folder as the project boundary. Preserve all user inputs and unrelated
 
 ### 3. Create the meeting memo
 
+- **Non-negotiable rule for the topical body before `访谈记录`: write in plain, evidence-led language and never promote the company.** Describe what the company does, what has happened, what remains unverified, and what conditions or constraints apply. The narrator may be neutral or appropriately critical, but may not sound admiring, persuasive or promotional.
+- Remove evaluative adjectives and intensifying adverbs unless they are indispensable parts of a sourced technical term or exact quoted claim. Prohibited narrator wording includes, but is not limited to, `优秀`, `卓越`, `领先`, `强大`, `成熟`, `先进`, `创新性`, `独特`, `显著`, `快速`, `成功`, `深厚`, `丰富`, `广泛`, `充分`, `高度`, `极具`, `非常`, `较强`, `较高`, `较大`, `良好`, `优异`, `头部`, `龙头` and `核心竞争力`. Replace the evaluation with an observable fact, number, comparison basis, customer stage, date or limitation; if none exists, delete it.
+- Prefer critical factual constructions such as `尚处于送样阶段`, `收入依赖单一客户`, `该指标来自公司内部测试`, `订单金额未确定`, `量产时间取决于客户验证`, and `材料未提供第三方证据`. Critical language must itself be source-grounded: do not invent defects, risks or negative conclusions merely to sound cautious.
+- Treat every BP superlative, market-position claim and management self-assessment as an attributed claim rather than the memo narrator's conclusion. Even with attribution, retain it only when materially useful and immediately state its scope, evidence status or verification limitation.
 - For names, roles and terminology, use the BP/company introduction as the primary correction source. For what was actually asked, answered, claimed, quantified or qualified during the meeting, use the corrected transcript as the primary source and the BP as supplementary background.
 - If transcript and BP conflict on a substantive fact, number or stage, do not silently replace either side. The meeting memo should accurately state the meeting account; preserve the discrepancy for downstream project-intake notes.
 - Write objectively. Separate completed delivery, customer testing, expected orders, forecasts and long-term plans.
@@ -106,6 +110,7 @@ Treat the folder as the project boundary. Preserve all user inputs and unrelated
 - Confirm Q&A contains no `【】`, Markdown bullets or outline numbering introduced by the model.
 - Confirm Q&A contains no greetings, filler particles, false starts or model-added conversational transitions.
 - Confirm promotional absolutes were removed or rewritten with explicit attribution, scope and stage.
+- Confirm every topical-body sentence passes the plain-language test: it states an observable fact, sourced claim, constraint, uncertainty or risk without decorative adjectives, intensifying adverbs, praise or sales language.
 - Confirm the topical body contains no `【】` labels and reads as normal investment-memo prose rather than a slide deck.
 - Confirm Q&A covers financing, products, technology, customers, financials, strategy and every other topic actually discussed.
 - Confirm the memo uses only the allowed Heading 1 and Heading 2 sequence.

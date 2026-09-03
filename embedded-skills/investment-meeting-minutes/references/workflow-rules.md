@@ -88,11 +88,14 @@ Do not force topics that were not discussed.
 
 Write a detailed factual synthesis before the appended Q&A. Use neutral language and calibrated stages. Concision means removing repetition and filler, not removing substantive facts:
 
+The topical body is governed by a strict no-promotion rule. Use plain description and, where supported, critical framing. Do not decorate the company, team, technology, products, market position or prospects with evaluative adjectives or intensifying adverbs. Convert `技术先进`, `团队优秀`, `客户资源丰富`, `竞争力强`, `市场空间巨大` and similar claims into the underlying evidence, stage and limitation. If the material provides no observable support, omit the judgment. Do not manufacture criticism; every limitation or risk must follow from the supplied material.
+
 - `已采购/已交付/已确认收入` only for completed facts.
 - `已完成测试/正在测试/正在导入` for customer verification.
 - `预计/目标/规划/可能` for forecasts.
 - `公司认为/公司估算` for subjective market or technology judgments when attribution is necessary.
 - Promotional absolutes are prohibited in narrator voice. Expressions such as `唯一`, `垄断`, `绝对领先`, `完全替代`, `必然爆发` and `确定性极强` must be replaced by the underlying verifiable fact plus attribution, scope and stage. Keep an exact market-share figure only as a company claim and only for the stated segment.
+- Before finalizing, scan the topical body for praise and intensifiers including `优秀`, `卓越`, `领先`, `强大`, `成熟`, `先进`, `创新性`, `独特`, `显著`, `快速`, `成功`, `深厚`, `丰富`, `广泛`, `充分`, `高度`, `极具`, `非常`, `较强`, `较高`, `较大`, `良好`, `优异`, `头部`, `龙头` and `核心竞争力`. Retain a word only if it is part of an exact attributed claim or a necessary technical term and its basis and scope are stated; otherwise replace it with evidence or delete it.
 
 House style for the topical body:
 
