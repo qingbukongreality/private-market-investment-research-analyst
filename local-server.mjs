@@ -14,7 +14,7 @@ const visionOcr = path.join(appDir, "tools/vision-ocr");
 const meetingInstructions = [
   await readFile(path.join(embeddedDir, "investment-meeting-minutes/SKILL.md"), "utf8"),
   await readFile(path.join(embeddedDir, "investment-meeting-minutes/references/workflow-rules.md"), "utf8"),
-  "姓名、职务、公司名、产品名和专业术语必须优先采用BP、公司介绍和团队页中的书面写法，纠正录音近音字和转写错误；会议事实、数字、问答和限定仍以录音为准。书面材料之间存在姓名或角色冲突时不得拼接或猜测，应写姓名待确认。",
+  "来源优先级铁律：会议录音及修正/原始转写决定会议纪要的事实主线、重点、阶段、数字和限定。BP、公司介绍和补充材料只用于纠正姓名、职务、公司名、产品名和专业术语，以及补充理解会议所必需的少量事实背景；不得用BP覆盖、升级、美化或替换会议口径。BP独有的市场地位、唯一性、客户认可、订单、性能、预测和技术优势等宣传性主张，会议未独立支持时不得写成纪要事实。书面材料之间存在姓名或角色冲突时不得拼接或猜测，应写姓名待确认。",
 ].join("\n\n");
 const intakeInstructions = [
   await readFile(path.join(embeddedDir, "investment-project-intake/SKILL.md"), "utf8"),
@@ -704,7 +704,7 @@ const server = createServer(async (req, res) => {
         if (!templateName) throw new Error("未找到会议纪要模板，请在输入根目录放置《会议纪要模板.docx》");
         const template = path.join(body.workspace, templateName);
         const base = `公司：${details.name}\n记录时间：${details.metadata.meetingDate}\n参会人：${details.metadata.participants}\n\n材料：${materials}`;
-        const result = await aiJson(`${meetingInstructions}\n\n只生成最终会议纪要的主题正文，不输出中间文件。只输出JSON，必须包含 companyPosition,product,marketSituation,coreCustomers,coreTechnology,differentiation,financials,historicalFinancing,currentRound,developmentPlan。主题正文采用投资会议纪要的连贯中文段落，不是BP摘抄或PPT提纲。每个字段通常写1至4段，信息密度高但避免罗列全部产品型号。铁律：前述主题正文绝对不能替公司宣传，必须使用白描、审慎、证据导向的语言，可以在材料支持时直接指出依赖、限制、尚未验证事项和风险。不得用形容词或副词装饰公司、团队、技术、产品、市场地位和前景；“优秀、卓越、领先、强大、成熟、先进、独特、显著、快速、成功、深厚、丰富、广泛、充分、高度、极具、非常、较强、较高、较大、良好、优异、头部、龙头、核心竞争力”等评价词原则上删除，改写为数字、时间、客户阶段、比较口径、事实或限制。批判也必须有材料依据，不得臆造负面结论。严禁使用【】标签、Markdown短横线、编号清单或段内小标题；应用领域应自然写成“LED方面，……”“AR方面，……”。BP或管理层的宣传和市场地位判断只能作为有范围、有阶段、有证据限制的公司自述，不能变成客观结论。保留关键产品类型与用途、技术参数与比较、客户名称与合作阶段、订单、产能、价格、收入利润、时间节点、融资金额估值、团队和发展计划；完整的逐问逐答细节放在访谈记录中。不得编造，不得输出过程说明。`, base, 14000, generationAbort.signal);
+        const result = await aiJson(`${meetingInstructions}\n\n只生成最终会议纪要的主题正文，不输出中间文件。只输出JSON，必须包含 companyPosition,product,marketSituation,coreCustomers,coreTechnology,differentiation,financials,historicalFinancing,currentRound,developmentPlan。主题正文采用投资会议纪要的连贯中文段落，不是BP摘抄或PPT提纲。每个字段通常写1至4段，信息密度高但避免罗列全部产品型号。来源铁律：正文以会议录音和转写为主，会议决定事实主线、重点、阶段、数字和限定；BP、简介和补充材料只用于纠正名称术语及补充理解会议所必需的少量背景，不得覆盖、升级、美化或替换会议口径。BP独有的市场地位、唯一性、客户认可、订单、性能、预测、技术优势等宣传内容，会议没有独立支持时不写；BP与会议冲突时正文采用会议口径，冲突留给项目录入备注。语言铁律：前述主题正文绝对不能替公司宣传，必须使用白描、审慎、证据导向的语言，可以在材料支持时直接指出依赖、限制、尚未验证事项和风险。不得用形容词或副词装饰公司、团队、技术、产品、市场地位和前景；“优秀、卓越、领先、强大、成熟、先进、独特、显著、快速、成功、深厚、丰富、广泛、充分、高度、极具、非常、较强、较高、较大、良好、优异、头部、龙头、核心竞争力”等评价词原则上删除，改写为数字、时间、客户阶段、比较口径、事实或限制。批判也必须有材料依据，不得臆造负面结论。严禁使用【】标签、Markdown短横线、编号清单或段内小标题；应用领域应自然写成“LED方面，……”“AR方面，……”。保留会议中出现的关键产品类型与用途、技术参数与比较、客户名称与合作阶段、订单、产能、价格、收入利润、时间节点、融资金额估值、团队和发展计划；完整的逐问逐答细节放在访谈记录中。不得编造，不得输出过程说明。`, base, 14000, generationAbort.signal);
         const transcript = await collectTranscript(details);
         const qaSource = transcript || materials;
         const entitySources = meetingEntityReferenceMaterials(materials);
